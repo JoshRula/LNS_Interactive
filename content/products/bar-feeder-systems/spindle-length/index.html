@@ -1,0 +1,452 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta
+    name="viewport"
+    content="width=1920, height=1080, initial-scale=1"
+  >
+  <title>Spindle Length Bar Feeders</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    body {
+      font-family: Arial, Helvetica, sans-serif;
+      background: #b70c25;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+
+    :root {
+      /*
+        Primary tuning controls
+      */
+      --carousel-gap: 32px;
+      --tile-width: 31.4%;
+      --selected-tile-scale: 1.14;
+      --track-slide-duration: 850ms;
+      --tile-zoom-duration: 650ms;
+      --carousel-easing: cubic-bezier(0.22, 1, 0.36, 1);
+      --swipe-threshold: 70px;
+    }
+
+    /*
+      The viewport clips the ends of the continuous thumbnail rail.
+      Horizontal touch gestures are handled by JavaScript.
+    */
+    .carousel-viewport {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #b70c25;
+      touch-action: none;
+    }
+
+    /*
+      This prompt remains hidden until the same tile has stayed centered
+      for 2.6 seconds without being tapped or replaced by another selection.
+    */
+    .center-tile-prompt {
+      position: absolute;
+      left: 50%;
+      top: 14%;
+      transform: translateX(-50%);
+      z-index: 10;
+      color: #ffffff;
+      font-size: 42px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      text-align: center;
+      opacity: 0;
+      visibility: hidden;
+      transition:
+        opacity 500ms ease,
+        visibility 0s linear 500ms;
+      pointer-events: none;
+    }
+
+    .center-tile-prompt.is-visible {
+      opacity: 1;
+      visibility: visible;
+      transition:
+        opacity 500ms ease,
+        visibility 0s linear 0s;
+    }
+
+    /*
+      The track moves as one piece, preserving the gap between all tiles.
+    */
+    .carousel-track {
+      position: absolute;
+      left: 0;
+      top: 50%;
+      display: flex;
+      align-items: center;
+      gap: var(--carousel-gap);
+      padding: 0 5%;
+      will-change: transform;
+      transition:
+        transform var(--track-slide-duration) var(--carousel-easing);
+    }
+
+    .carousel-track.is-dragging {
+      transition: none;
+    }
+
+    /*
+      Each thumbnail is always 16:9.
+    */
+    .carousel-tile {
+      position: relative;
+      flex: 0 0 var(--tile-width);
+      aspect-ratio: 16 / 9;
+      height: auto;
+      margin: 0;
+      padding: 0;
+      border: 3px solid rgba(255, 255, 255, 0.55);
+      background: rgba(255, 255, 255, 0.12);
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
+      cursor: pointer;
+      overflow: hidden;
+      appearance: none;
+      -webkit-appearance: none;
+      transform: scale(1);
+      transform-origin: center center;
+      transition:
+        transform var(--tile-zoom-duration) var(--carousel-easing),
+        opacity var(--tile-zoom-duration) ease,
+        border-color var(--tile-zoom-duration) ease;
+    }
+
+    /*
+      The centered tile remains zoomed at all times.
+      Swiping changes which tile receives this class.
+    */
+    .carousel-tile.is-selected {
+      transform: scale(var(--selected-tile-scale));
+      border-color: rgba(190, 0, 45, 0.95);
+      z-index: 2;
+    }
+
+    .carousel-tile:focus-visible {
+      outline: 5px solid rgba(255, 255, 255, 0.95);
+      outline-offset: 4px;
+    }
+
+    .carousel-tile img {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      background: #ffffff;
+      pointer-events: none;
+      user-select: none;
+      -webkit-user-drag: none;
+    }
+
+    /*
+      Optional setup mode:
+      Add class="show-carousel-debugging" to the body element.
+    */
+    body.show-carousel-debugging .carousel-tile {
+      outline: 3px dashed rgba(255, 0, 0, 0.95);
+      outline-offset: -3px;
+    }
+
+    body.show-carousel-debugging .carousel-tile::after {
+      content: attr(data-debug-label);
+      position: absolute;
+      left: 6px;
+      top: 6px;
+      padding: 5px 8px;
+      background: rgba(0, 0, 0, 0.85);
+      color: #ffffff;
+      font-size: 18px;
+      white-space: nowrap;
+      pointer-events: none;
+    }
+  </style>
+</head>
+
+<body>
+  <main
+    id="carouselViewport"
+    class="carousel-viewport"
+    aria-label="Swipe to choose a spindle length bar feeder"
+  >
+    <div
+      id="centerTilePrompt"
+      class="center-tile-prompt"
+      aria-live="polite"
+    >
+      Tap to see more
+    </div>
+
+    <div id="carouselTrack" class="carousel-track">
+      <button
+        id="machineOneChoice"
+        class="carousel-tile"
+        type="button"
+        aria-label="Open spindle length models 65 and 80 plus"
+        data-debug-label="65 & 80+"
+        data-destination-page="content/products/bar-feeder-systems/spindle-length/machine-one/index.html"
+      >
+        <img
+          src="SpindleLengthPage1 _ 65&amp;80+.png"
+          alt="Spindle length models 65 and 80 plus"
+        >
+      </button>
+
+      <button
+        id="machineTwoChoice"
+        class="carousel-tile"
+        type="button"
+        aria-label="Open spindle length model 105 plus"
+        data-debug-label="105+"
+        data-destination-page="content/products/bar-feeder-systems/spindle-length/machine-two/index.html"
+      >
+        <img
+          src="SpindleLengthPage2 _105+.png"
+          alt="Spindle length model 105 plus"
+        >
+      </button>
+    </div>
+  </main>
+
+  <script>
+    /*
+      Touch-first persistent-focus carousel
+
+      Interaction:
+      - Swipe left or right to change the centered tile.
+      - The centered tile stays zoomed.
+      - Tapping a non-centered tile centers it.
+      - Tapping the already-centered tile opens its detail page.
+      - The parent page continues to own the shared Back button and history.
+    */
+
+    const carouselViewport = document.getElementById("carouselViewport");
+    const carouselTrack = document.getElementById("carouselTrack");
+    const centerTilePrompt = document.getElementById("centerTilePrompt");
+    const carouselTiles = Array.from(
+      document.querySelectorAll(".carousel-tile")
+    );
+
+    let selectedTileIndex = 0;
+    let currentTrackOffset = 0;
+
+    let pointerIsDown = false;
+    let pointerStartX = 0;
+    let pointerStartOffset = 0;
+    let pointerTravelDistance = 0;
+    let suppressNextClick = false;
+    let centerPromptTimerId = null;
+
+    const swipeThreshold = 70;
+    const centerPromptDelay = 2600;
+
+    function clampTileIndex(tileIndex) {
+      return Math.max(
+        0,
+        Math.min(tileIndex, carouselTiles.length - 1)
+      );
+    }
+
+    function hideCenterTilePrompt() {
+      if (centerPromptTimerId !== null) {
+        window.clearTimeout(centerPromptTimerId);
+        centerPromptTimerId = null;
+      }
+
+      centerTilePrompt.classList.remove("is-visible");
+    }
+
+    function scheduleCenterTilePrompt() {
+      hideCenterTilePrompt();
+
+      centerPromptTimerId = window.setTimeout(() => {
+        centerTilePrompt.classList.add("is-visible");
+        centerPromptTimerId = null;
+      }, centerPromptDelay);
+    }
+
+    function calculateCenteredTrackOffset(tileIndex) {
+      const selectedTile = carouselTiles[tileIndex];
+
+      if (!selectedTile) {
+        return currentTrackOffset;
+      }
+
+      const viewportCenter = carouselViewport.clientWidth / 2;
+      const selectedTileCenter =
+        selectedTile.offsetLeft + selectedTile.offsetWidth / 2;
+
+      return viewportCenter - selectedTileCenter;
+    }
+
+    function applyTrackOffset(trackOffset, animate = true) {
+      carouselTrack.classList.toggle("is-dragging", !animate);
+
+      carouselTrack.style.transform =
+        `translate(${trackOffset}px, -50%)`;
+
+      currentTrackOffset = trackOffset;
+    }
+
+    function selectCarouselTile(tileIndex, animate = true) {
+      selectedTileIndex = clampTileIndex(tileIndex);
+
+      carouselTiles.forEach((tile, index) => {
+        const tileIsSelected = index === selectedTileIndex;
+
+        tile.classList.toggle("is-selected", tileIsSelected);
+        tile.setAttribute(
+          "aria-current",
+          tileIsSelected ? "true" : "false"
+        );
+      });
+
+      const centeredOffset =
+        calculateCenteredTrackOffset(selectedTileIndex);
+
+      applyTrackOffset(centeredOffset, animate);
+      scheduleCenterTilePrompt();
+    }
+
+    function openSelectedTile(tile) {
+      const destinationPagePath = tile.dataset.destinationPage;
+
+      if (
+        window.parent &&
+        typeof window.parent.navigateContentPage === "function"
+      ) {
+        window.parent.navigateContentPage(destinationPagePath);
+        return;
+      }
+
+      console.warn(
+        `Parent navigation is unavailable. Intended destination: ${destinationPagePath}`
+      );
+    }
+
+    function handlePointerDown(event) {
+      hideCenterTilePrompt();
+      pointerIsDown = true;
+      pointerStartX = event.clientX;
+      pointerStartOffset = currentTrackOffset;
+      pointerTravelDistance = 0;
+      suppressNextClick = false;
+
+      carouselViewport.setPointerCapture(event.pointerId);
+      carouselTrack.classList.add("is-dragging");
+    }
+
+    function handlePointerMove(event) {
+      if (!pointerIsDown) {
+        return;
+      }
+
+      const horizontalMovement = event.clientX - pointerStartX;
+      pointerTravelDistance = Math.max(
+        pointerTravelDistance,
+        Math.abs(horizontalMovement)
+      );
+
+      applyTrackOffset(
+        pointerStartOffset + horizontalMovement,
+        false
+      );
+    }
+
+    function finishPointerGesture(event) {
+      if (!pointerIsDown) {
+        return;
+      }
+
+      pointerIsDown = false;
+      carouselTrack.classList.remove("is-dragging");
+
+      const horizontalMovement = event.clientX - pointerStartX;
+
+      if (Math.abs(horizontalMovement) >= swipeThreshold) {
+        /*
+          Swiping left advances to the next tile.
+          Swiping right returns to the previous tile.
+        */
+        const direction = horizontalMovement < 0 ? 1 : -1;
+
+        suppressNextClick = true;
+        selectCarouselTile(selectedTileIndex + direction, true);
+      } else {
+        /*
+          A short drag snaps back to the currently selected tile.
+        */
+        selectCarouselTile(selectedTileIndex, true);
+      }
+
+      if (carouselViewport.hasPointerCapture(event.pointerId)) {
+        carouselViewport.releasePointerCapture(event.pointerId);
+      }
+    }
+
+    carouselViewport.addEventListener(
+      "pointerdown",
+      handlePointerDown
+    );
+
+    carouselViewport.addEventListener(
+      "pointermove",
+      handlePointerMove
+    );
+
+    carouselViewport.addEventListener(
+      "pointerup",
+      finishPointerGesture
+    );
+
+    carouselViewport.addEventListener(
+      "pointercancel",
+      finishPointerGesture
+    );
+
+    carouselTiles.forEach((tile, tileIndex) => {
+      tile.addEventListener("click", (event) => {
+        hideCenterTilePrompt();
+
+        if (suppressNextClick || pointerTravelDistance >= swipeThreshold) {
+          event.preventDefault();
+          suppressNextClick = false;
+          return;
+        }
+
+        if (tileIndex !== selectedTileIndex) {
+          selectCarouselTile(tileIndex, true);
+          return;
+        }
+
+        openSelectedTile(tile);
+      });
+    });
+
+    window.addEventListener("load", () => {
+      selectCarouselTile(selectedTileIndex, false);
+    });
+
+    window.addEventListener("resize", () => {
+      selectCarouselTile(selectedTileIndex, false);
+    });
+  </script>
+</body>
+</html>

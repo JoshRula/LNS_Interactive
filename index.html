@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta
+    name="viewport"
+    content="width=1080, height=1920, initial-scale=1"
+  >
+  <title>Home</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+  <div id="screenSize">
+    <div
+      id="headerItem"
+      class="row"
+      style="top:80px; height:300px;"
+    >
+      <div
+        id="row-1-element-1"
+        class="element"
+        style="left:0px; top:0px; width:1080px; height:300px; z-index:1;"
+      ></div>
+    </div>
+
+    <div
+      id="row-2"
+      class="row"
+      style="
+        top:460px;
+        height:600px;
+        background-image:url('assets/Main Menu Starting Point.png');
+        background-repeat:no-repeat;
+        background-size:cover;
+        background-position:center;
+      "
+    >
+      <div
+        id="Title_Card"
+        class="element"
+        style="left:0px; top:47px; width:1080px; height:607px; z-index:1;"
+      >
+        <button
+          id="productsMainMenuHotspot"
+          class="main-menu-hotspot"
+          type="button"
+          aria-label="Open Products landing page"
+          data-content-page="content/products/index.html"
+          style="left:32px; top:180px; width:239px; height:180px;"
+        ></button>
+
+        <button
+          id="globalVisionMainMenuHotspot"
+          class="main-menu-hotspot"
+          type="button"
+          aria-label="Open Global Vision landing page"
+          data-content-page="content/global-vision/index.html"
+          style="left:284px; top:180px; width:239px; height:180px;"
+        ></button>
+
+        <button
+          id="digitalSolutionsMainMenuHotspot"
+          class="main-menu-hotspot"
+          type="button"
+          aria-label="Open Digital Solutions landing page"
+          data-content-page="content/digital-solutions/index.html"
+          style="left:537px; top:180px; width:239px; height:180px;"
+        ></button>
+
+        <button
+          id="digitalPlatformMainMenuHotspot"
+          class="main-menu-hotspot"
+          type="button"
+          aria-label="Open Digital Platform landing page"
+          data-content-page="content/digital-platform/index.html"
+          style="left:793px; top:180px; width:239px; height:180px;"
+        ></button>
+      </div>
+    </div>
+
+    <div
+      id="footer"
+      class="row"
+      style="top:1240px; height:600px;"
+    >
+      <div
+        id="footer-element-1"
+        class="element"
+        style="left:0px; top:0px; width:1080px; height:600px; z-index:1;"
+      ></div>
+    </div>
+  </div>
+
+  <div
+    id="modalOverlay"
+    class="modal-overlay hidden"
+    aria-hidden="true"
+    role="dialog"
+    aria-modal="true"
+    aria-label="Kiosk content"
+  >
+    <iframe
+      id="content"
+      name="content"
+      class="modal-content-frame"
+      title="Kiosk content page"
+      src="about:blank"
+      scrolling="no"
+    ></iframe>
+
+    <button
+      id="modalBackButton"
+      class="modal-back-button hidden"
+      type="button"
+      aria-label="Go back"
+    >
+      <svg
+        id="leftChevron"
+        viewBox="0 0 117 543"
+        preserveAspectRatio="xMidYMid meet"
+        aria-hidden="true"
+        focusable="false"
+      >
+        <path
+          id="leftChevronPath"
+          d="m 98.942506,515.00111
+             c -3.36631,-6.4805 -8.176956,-15.65517 -10.690335,-20.38812
+             -2.513388,-4.73296 -5.608,-10.57136 -6.876915,-12.97426
+             -1.268915,-2.40288 -2.830596,-5.35553 -3.470406,-6.56144
+             l -1.163295,-2.19257
+             v -13.88494 -13.88497
+             l -3.031881,-0.0741 -3.031881,-0.0741
+             -1.038599,-3.04498
+             C 68.1849,437.65797 62.113542,420.29927 60.51717,415.8408
+             59.787172,413.80199 57.649222,407.78484 55.766169,402.46937
+             49.99818,386.18749 44.201294,369.90028 39.980994,358.1186
+             38.833341,354.91476 35.940369,346.75288 33.552161,339.98112
+             27.914152,323.99459 22.962787,310.01078 20.942375,304.36815
+             20.055914,301.89245 18.73499,298.19876 18.006986,296.15995
+             17.278984,294.12113 14.834885,287.32951 12.575655,281.06744
+             10.316435,274.80538 7.4637559,266.84969 6.2363831,263.38814
+             l -2.2316086,-6.29372
+             6.4408495,-17.66893
+             c 7.819657,-21.45134 12.250052,-33.74331 20.779074,-57.65082
+             3.584781,-10.04842 8.906447,-24.82318 11.825902,-32.8328
+             7.805947,-21.41581 16.72339,-46.09276 23.011785,-63.679765
+             1.379892,-3.859184 2.586841,-7.102508 2.682113,-7.207402
+             0.09528,-0.104904 1.689551,-0.224051 3.542824,-0.264783
+             l 3.369586,-0.07407
+             0.120516,-13.106648 0.120516,-13.106638
+             2.892408,-4.515964
+             c 3.037255,-4.742126 7.84614,-12.383646 14.48749,-23.02124
+             6.148661,-9.84843 10.912353,-17.4096065 11.426993,-18.1374765
+             0.46423,-0.6565913 0.46806,-0.4433751 0.47338,26.3260465
+             l 0.005,26.987996
+             -2.14907,5.315253
+             c -1.87092,4.627266 -5.336322,13.633327 -7.852624,20.407758
+             -0.432743,1.165028 -1.40833,3.786356 -2.167962,5.825169
+             -4.876873,13.089214 -15.518818,42.363814 -25.074051,68.975374
+             -4.527277,12.60861 -7.876723,21.80707 -17.547548,48.1901
+             -10.044799,27.4033 -17.759966,48.8114 -17.759966,49.28051
+             0,0.26074 2.641747,7.77752 5.870549,16.70398
+             3.228802,8.92645 6.874766,19.02997 8.102139,22.45227
+             8.148163,22.71947 15.654248,43.79756 21.215386,59.57566
+             1.565525,4.44169 3.682961,10.39925 4.705425,13.23904
+             1.022464,2.83977 3.026998,8.43988 4.454526,12.44469
+             6.89079,19.33151 25.845686,71.54321 27.112186,74.6811
+             l 1.09283,2.70766
+             -0.0612,33.92173
+             -0.0612,33.92173
+             z"
+          fill="#9e0303"
+          fill-opacity="1"
+          stroke="#ffffff"
+          stroke-width="2.578"
+          stroke-opacity="1"
+        />
+      </svg>
+    </button>
+
+    <div
+      id="backButtonTip"
+      class="kiosk-tip back-button-tip"
+      aria-live="polite"
+    >
+      Tap to return to the previous page
+    </div>
+
+    <div
+      id="outsideTapTip"
+      class="kiosk-tip outside-tap-tip"
+      aria-live="polite"
+    >
+      Any tap outside the content returns home
+    </div>
+
+    <div
+      id="farewellTip"
+      class="kiosk-tip farewell-tip"
+      aria-live="assertive"
+    >
+      Thank you for looking
+    </div>
+  </div>
+
+  <script src="main.js"></script>
+</body>
+</html>

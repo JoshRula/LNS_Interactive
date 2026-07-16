@@ -1,0 +1,258 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: 1080px;
+  height: 1920px;
+  overflow: hidden;
+}
+
+body {
+  position: relative;
+  font-family: Arial, Helvetica, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+
+:root {
+  --clickable-border: 2px solid rgba(255, 255, 255, 0.75);
+  --modal-back-button-opacity: 0.10;
+  --modal-back-button-active-opacity: 1;
+  --tip-fade-duration: 500ms;
+}
+
+/* =========================================================
+   MAIN KIOSK LAYOUT
+   ========================================================= */
+
+#screenSize {
+  position: relative;
+  width: 1080px;
+  height: 1920px;
+  overflow: hidden;
+  background: #b50029;
+}
+
+.row {
+  position: absolute;
+  left: 0;
+  width: 1080px;
+  overflow: visible;
+}
+
+.element {
+  position: absolute;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.08);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+}
+
+/* =========================================================
+   MAIN-MENU HOTSPOTS
+   ========================================================= */
+
+.main-menu-hotspot {
+  position: absolute;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  pointer-events: auto;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.main-menu-hotspot:focus-visible {
+  outline: 3px solid rgba(255, 255, 255, 0.9);
+  outline-offset: -3px;
+}
+
+body.show-main-menu-hotspot-debugging .main-menu-hotspot {
+  border: var(--clickable-border);
+  background: rgba(255, 255, 255, 0.10);
+}
+
+/* =========================================================
+   FULL-SCREEN MODAL OVERLAY
+   ========================================================= */
+
+.modal-overlay {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 1080px;
+  height: 1920px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.72);
+  z-index: 50;
+}
+
+.modal-overlay.hidden {
+  display: none;
+}
+
+/* =========================================================
+   CONTENT IFRAME
+   ========================================================= */
+
+.modal-content-frame {
+  position: absolute;
+  left: 10px;
+  top: 380px;
+  width: 1060px;
+  max-width: 100%;
+  aspect-ratio: 16 / 9;
+  height: auto;
+  display: block;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border: none;
+  background: #ffffff;
+  box-shadow: 0 0 40px rgba(0, 0, 0, 0.75);
+  z-index: 51;
+}
+
+.modal-content-frame:focus {
+  outline: none;
+}
+
+/* =========================================================
+   SHARED BACK CHEVRON
+   ========================================================= */
+
+.modal-back-button {
+  position: absolute;
+  left: 10px;
+  top: 690px;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 75px;
+  height: 350px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: #ff1f1f;
+  cursor: pointer;
+  opacity: var(--modal-back-button-opacity);
+  transition:
+    opacity var(--tip-fade-duration) ease,
+    background-color 180ms ease-in-out;
+  z-index: 60;
+  pointer-events: auto;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.modal-back-button:hover,
+.modal-back-button:focus-visible,
+.modal-back-button.coaching-highlight {
+  opacity: var(--modal-back-button-active-opacity);
+  outline: none;
+}
+
+.modal-back-button:active {
+  background: rgba(255, 0, 0, 0.22);
+}
+
+.modal-back-button.hidden {
+  display: none;
+}
+
+.modal-back-button svg {
+  display: block;
+  width: auto;
+  height: 480px;
+  pointer-events: none;
+}
+
+/* =========================================================
+   SESSION COACHING TIPS
+   ========================================================= */
+
+.kiosk-tip {
+  position: absolute;
+  z-index: 70;
+  color: #ffffff;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: center;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity var(--tip-fade-duration) ease,
+    visibility 0s linear var(--tip-fade-duration);
+}
+
+.kiosk-tip.is-visible {
+  opacity: 1;
+  visibility: visible;
+  transition:
+    opacity var(--tip-fade-duration) ease,
+    visibility 0s linear 0s;
+}
+
+.back-button-tip {
+  left: 18px;
+  top: 425px;
+  width: 340px;
+  padding: 14px 18px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.78);
+  font-size: 25px;
+  text-align: left;
+}
+
+.outside-tap-tip {
+  left: 50%;
+  top: 1035px;
+  transform: translateX(-50%);
+  width: 700px;
+  padding: 16px 24px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.78);
+  font-size: 27px;
+}
+
+.farewell-tip {
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 700px;
+  padding: 32px 42px;
+  border-radius: 16px;
+  background: rgba(0, 0, 0, 0.88);
+  font-size: 38px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45);
+}
+
+/* =========================================================
+   OPTIONAL LAYOUT DEBUGGING
+   ========================================================= */
+
+body.show-kiosk-layout-debugging #screenSize {
+  outline: 2px solid rgba(255, 255, 255, 0.75);
+}
+
+body.show-kiosk-layout-debugging .row {
+  outline: 2px solid rgba(255, 255, 255, 0.55);
+}
+
+body.show-kiosk-layout-debugging .element {
+  outline: 2px solid rgba(255, 255, 255, 0.80);
+}
+
+body.show-kiosk-layout-debugging .modal-content-frame {
+  outline: 3px solid rgba(0, 255, 255, 0.95);
+}

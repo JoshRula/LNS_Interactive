@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta
+    name="viewport"
+    content="width=1920, height=1080, initial-scale=1"
+  >
+  <title>Products</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #ffffff;
+    }
+
+    body {
+      position: relative;
+      font-family: Arial, Helvetica, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /*
+      This page is designed to fill the 16:9 iframe in the parent kiosk.
+
+      ProductsHomePage.png should be stored in the same folder as this file:
+
+      content/
+        products/
+          index.html
+          ProductsHomePage.png
+    */
+    .products-page {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-image: url("ProductsHomePage.png");
+      background-repeat: no-repeat;
+      background-position: center;
+      background-size: 100% 100%;
+    }
+
+    /*
+      Each hotspot covers both the icon and its adjacent text label.
+
+      Percentages are used instead of fixed pixels so the hotspots remain
+      aligned when the 1920 × 1080 artwork is scaled to the 1060px-wide iframe.
+    */
+    .product-category-hotspot {
+      position: absolute;
+      display: block;
+      margin: 0;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      cursor: pointer;
+      appearance: none;
+      -webkit-appearance: none;
+    }
+
+    .product-category-hotspot:hover,
+    .product-category-hotspot:focus-visible {
+      background: rgba(190, 0, 45, 0.12);
+      outline: 3px solid rgba(190, 0, 45, 0.75);
+      outline-offset: -3px;
+    }
+
+    /*
+      Add class="show-hotspot-debugging" to the body element while tuning
+      hotspot positions. Remove it for the finished kiosk.
+    */
+    body.show-hotspot-debugging .product-category-hotspot {
+      border: 3px dashed rgba(255, 0, 0, 0.95);
+      background: rgba(255, 0, 0, 0.14);
+    }
+
+    body.show-hotspot-debugging .product-category-hotspot::after {
+      content: attr(data-debug-label);
+      position: absolute;
+      left: 4px;
+      top: 4px;
+      padding: 5px 8px;
+      background: rgba(0, 0, 0, 0.85);
+      color: #ffffff;
+      font-size: 18px;
+      line-height: 1.1;
+      white-space: nowrap;
+      pointer-events: none;
+    }
+
+    /*
+      Initial hotspot regions estimated from the supplied 1920 × 1080 artwork.
+      Each region intentionally includes the icon and the full text label.
+    */
+
+    #barFeederSystemsHotspot {
+      left: 9.2%;
+      top: 28.3%;
+      width: 21.5%;
+      height: 20.0%;
+    }
+
+    #highPressureCoolantSystemsHotspot {
+      left: 28.0%;
+      top: 14.1%;
+      width: 25.5%;
+      height: 21.5%;
+    }
+
+    #airFiltrationSystemsHotspot {
+      left: 53.7%;
+      top: 18.0%;
+      width: 23.5%;
+      height: 20.0%;
+    }
+
+    #chipConveyorSystemsHotspot {
+      left: 69.5%;
+      top: 34.8%;
+      width: 23.5%;
+      height: 18.0%;
+    }
+
+    #workHoldingSystemsHotspot {
+      left: 53.2%;
+      top: 84.8%;
+      width: 24.0%;
+      height: 14.5%;
+    }
+  </style>
+</head>
+
+<body>
+  <main
+    class="products-page"
+    aria-label="Products category menu"
+  >
+    <button
+      id="barFeederSystemsHotspot"
+      class="product-category-hotspot"
+      type="button"
+      aria-label="Open Bar Feeder Systems"
+      data-debug-label="Bar Feeder Systems"
+      data-destination-page="content/products/bar-feeder-systems/index.html"
+    ></button>
+
+    <button
+      id="highPressureCoolantSystemsHotspot"
+      class="product-category-hotspot"
+      type="button"
+      aria-label="Open High Pressure Coolant Systems"
+      data-debug-label="High Pressure Coolant Systems"
+      data-destination-page="content/products/high-pressure-coolant-systems/index.html"
+    ></button>
+
+    <button
+      id="airFiltrationSystemsHotspot"
+      class="product-category-hotspot"
+      type="button"
+      aria-label="Open Air Filtration Systems"
+      data-debug-label="Air Filtration Systems"
+      data-destination-page="content/products/air-filtration-systems/index.html"
+    ></button>
+
+    <button
+      id="chipConveyorSystemsHotspot"
+      class="product-category-hotspot"
+      type="button"
+      aria-label="Open Chip Conveyor Systems"
+      data-debug-label="Chip Conveyor Systems"
+      data-destination-page="content/products/chip-conveyor-systems/index.html"
+    ></button>
+
+    <button
+      id="workHoldingSystemsHotspot"
+      class="product-category-hotspot"
+      type="button"
+      aria-label="Open Work Holding Systems"
+      data-debug-label="Work Holding Systems"
+      data-destination-page="content/products/work-holding-systems/index.html"
+    ></button>
+  </main>
+
+  <script>
+    /*
+      The parent index.html owns iframe navigation and the Back button.
+
+      Every category button sends its destination path to the parent's
+      navigateContentPage() function. Paths are written relative to the
+      root kiosk index.html, matching the parent main.js architecture.
+    */
+    document
+      .querySelectorAll(".product-category-hotspot[data-destination-page]")
+      .forEach((hotspotButton) => {
+        hotspotButton.addEventListener("click", () => {
+          const destinationPagePath =
+            hotspotButton.dataset.destinationPage;
+
+          if (
+            window.parent &&
+            typeof window.parent.navigateContentPage === "function"
+          ) {
+            window.parent.navigateContentPage(destinationPagePath);
+            return;
+          }
+
+          /*
+            This warning usually means the page was opened directly instead
+            of being loaded inside the kiosk iframe.
+          */
+          console.warn(
+            `Parent navigation is unavailable. Intended destination: ${destinationPagePath}`
+          );
+        });
+      });
+  </script>
+</body>
+</html>

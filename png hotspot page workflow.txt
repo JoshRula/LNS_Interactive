@@ -1,0 +1,12 @@
+Use the PNG Hotspot Page workflow on this image.
+
+I’ll understand that to mean:
+
+inspect the supplied 16:9 PNG
+identify each intended clickable icon/text region
+create a page-specific index.html
+use the PNG as the full-page background
+add transparent, absolutely positioned hotspots
+use percentage coordinates so they scale with the iframe
+connect each hotspot through window.parent.navigateContentPage(...)
+include optional debug outlines for tuning

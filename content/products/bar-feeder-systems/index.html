@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta
+    name="viewport"
+    content="width=1920, height=1080, initial-scale=1"
+  >
+  <title>Bar Feeders</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #ffffff;
+    }
+
+    body {
+      position: relative;
+      font-family: Arial, Helvetica, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /*
+      This page is designed to fill the 16:9 iframe in the parent kiosk.
+
+      Place this file and the background artwork together in:
+
+      content/
+        products/
+          bar-feeder-systems/
+            index.html
+            BarFeedersHomePage.png
+    */
+    .bar-feeders-page {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-image: url("BarFeedersHomePage.png");
+      background-repeat: no-repeat;
+      background-position: center;
+      background-size: 100% 100%;
+    }
+
+    /*
+      Each hotspot is sized to cover the underlined heading plus its
+      associated product image panel so the user can tap either area.
+    */
+    .bar-feeders-hotspot {
+      position: absolute;
+      display: block;
+      margin: 0;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      cursor: pointer;
+      appearance: none;
+      -webkit-appearance: none;
+    }
+
+    .bar-feeders-hotspot:hover,
+    .bar-feeders-hotspot:focus-visible {
+      background: rgba(190, 0, 45, 0.12);
+      outline: 3px solid rgba(190, 0, 45, 0.75);
+      outline-offset: -3px;
+    }
+
+    /*
+      Add class="show-hotspot-debugging" to the body while tuning hotspot
+      positions. Remove it for the finished kiosk.
+    */
+    body.show-hotspot-debugging .bar-feeders-hotspot {
+      border: 3px dashed rgba(255, 0, 0, 0.95);
+      background: rgba(255, 0, 0, 0.14);
+    }
+
+    body.show-hotspot-debugging .bar-feeders-hotspot::after {
+      content: attr(data-debug-label);
+      position: absolute;
+      left: 4px;
+      top: 4px;
+      padding: 5px 8px;
+      background: rgba(0, 0, 0, 0.85);
+      color: #ffffff;
+      font-size: 18px;
+      line-height: 1.1;
+      white-space: nowrap;
+      pointer-events: none;
+    }
+
+    /*
+      Hotspot 1:
+      Spindle Length heading plus left machine image.
+    */
+    #spindleLengthHotspot {
+      left: 1.5%;
+      top: 36.5%;
+      width: 43.8%;
+      height: 48.5%;
+    }
+
+    /*
+      Hotspot 2:
+      6' to 12' Bar Length heading plus right machine image.
+    */
+    #sixToTwelveBarLengthHotspot {
+      left: 52.2%;
+      top: 36.5%;
+      width: 43.5%;
+      height: 48.5%;
+    }
+  </style>
+</head>
+
+<body>
+  <main
+    class="bar-feeders-page"
+    aria-label="Bar Feeders category page"
+  >
+    <button
+      id="spindleLengthHotspot"
+      class="bar-feeders-hotspot"
+      type="button"
+      aria-label="Open Spindle Length bar feeders"
+      data-debug-label="Spindle Length"
+      data-destination-page="content/products/bar-feeder-systems/spindle-length/index.html"
+    ></button>
+
+    <button
+      id="sixToTwelveBarLengthHotspot"
+      class="bar-feeders-hotspot"
+      type="button"
+      aria-label="Open 6 to 12 foot Bar Length bar feeders"
+      data-debug-label="6' to 12' Bar Length"
+      data-destination-page="content/products/bar-feeder-systems/six-to-twelve-bar-length/index.html"
+    ></button>
+  </main>
+
+  <script>
+    /*
+      The parent index.html owns iframe navigation and the shared Back button.
+
+      Each hotspot sends a root-relative destination path to the parent's
+      navigateContentPage() function.
+    */
+    document
+      .querySelectorAll(".bar-feeders-hotspot[data-destination-page]")
+      .forEach((hotspotButton) => {
+        hotspotButton.addEventListener("click", () => {
+          const destinationPagePath =
+            hotspotButton.dataset.destinationPage;
+
+          if (
+            window.parent &&
+            typeof window.parent.navigateContentPage === "function"
+          ) {
+            window.parent.navigateContentPage(destinationPagePath);
+            return;
+          }
+
+          console.warn(
+            `Parent navigation is unavailable. Intended destination: ${destinationPagePath}`
+          );
+        });
+      });
+  </script>
+</body>
+</html>
