@@ -1,19 +1,84 @@
 /*
-  Parent-page navigation controller for the iframe-based kiosk.
+  Parent-page navigation and session coaching controller.
 
-  Architecture:
-  - index.html owns the modal overlay, iframe, Back button, and navigation history.
-  - Each content page lives in its own folder and is loaded into the iframe.
-  - Each content page owns its background PNG and page-specific hotspots.
-  - A child page opens another page by calling:
+  The parent page owns:
+  - iframe navigation history
+  - Back and outside-to-close behavior
+  - inactivity coaching
+  - abandonment/farewell behavior
+  - per-user familiarity counters
 
-      window.parent.navigateContentPage("content/example/index.html");
+  Child iframe pages continue to navigate by calling:
 
-  This project intentionally avoids fetch(), ES modules, frameworks, and external
-  dependencies so it can run locally in Fully Kiosk Browser.
+    window.parent.navigateContentPage("content/example/index.html");
 */
 
-document.addEventListener("DOMContentLoaded", initializeKioskNavigation);
+document.addEventListener("DOMContentLoaded", () => {
+  initializeRotatedViewport();
+  initializeKioskNavigation();
+});
+
+
+/* =========================================================
+   ROTATED PORTRAIT VIEWPORT
+   ========================================================= */
+
+/*
+  The kiosk is authored as a fixed 1080 x 1920 portrait canvas, while Android
+  and Fully Kiosk remain in landscape. CSS rotates the canvas. This function
+  scales it to fit the actual browser viewport without changing any existing
+  page coordinates.
+
+  After a 90-degree rotation, the portrait canvas occupies:
+    1920 logical pixels of browser width
+    1080 logical pixels of browser height
+*/
+function initializeRotatedViewport() {
+  const rotationViewport = document.getElementById("rotationViewport");
+
+  if (!rotationViewport) {
+    console.error("Rotated viewport could not initialize. Missing element: rotationViewport");
+    return;
+  }
+
+  const updateRotatedViewportScale = () => {
+    const availableWidth = window.innerWidth;
+    const availableHeight = window.innerHeight;
+
+    const widthScale = availableWidth / 1920;
+    const heightScale = availableHeight / 1080;
+    const fittedScale = Math.min(widthScale, heightScale);
+
+    rotationViewport.style.setProperty(
+      "--kiosk-scale",
+      String(fittedScale)
+    );
+  };
+
+  updateRotatedViewportScale();
+  window.addEventListener("resize", updateRotatedViewportScale);
+  window.addEventListener("orientationchange", updateRotatedViewportScale);
+}
+
+/* =========================================================
+   CONFIGURATION
+   ========================================================= */
+
+const coachingSettings = {
+  initialBackTipDelay: 3000,
+  outsideTipAdditionalDelay: 1000,
+  coachingDelayMultiplier: 2,
+  maximumBackTipDelay: 24000,
+
+  initialAbandonmentDelay: 25000,
+  abandonmentDelayMultiplier: 1.4,
+  maximumAbandonmentDelay: 70000,
+
+  farewellDisplayDuration: 3000,
+  homeIdleNewUserDelay: 7000,
+  maximumFamiliarityLevel: 3,
+  deepNavigationThreshold: 3
+};
 
 /* =========================================================
    DOM REFERENCES
@@ -22,31 +87,46 @@ document.addEventListener("DOMContentLoaded", initializeKioskNavigation);
 const modalOverlay = document.getElementById("modalOverlay");
 const contentFrame = document.getElementById("content");
 const modalBackButton = document.getElementById("modalBackButton");
+const backButtonTip = document.getElementById("backButtonTip");
+const outsideTapTip = document.getElementById("outsideTapTip");
+const farewellTip = document.getElementById("farewellTip");
 
 const mainMenuHotspots = document.querySelectorAll(
   ".main-menu-hotspot[data-content-page]"
 );
 
 /* =========================================================
-   NAVIGATION STATE
+   NAVIGATION AND SESSION STATE
    ========================================================= */
 
-/*
-  Each entry is a relative path previously displayed in the iframe.
-
-  Example:
-  [
-    "content/products/index.html",
-    "content/products/bar-feeders/index.html"
-  ]
-*/
 let contentNavigationHistory = [];
-
-/* The page currently displayed in the iframe. */
 let currentContentPagePath = null;
-
-/* The first page used when the modal was opened. */
 let modalStartingPagePath = null;
+
+const kioskSession = {
+  sessionId: 1,
+  familiarityLevel: 0,
+
+  backActions: 0,
+  outsideCloseActions: 0,
+  forwardNavigations: 0,
+  deepNavigationActions: 0,
+  deepestNavigationLevel: 0,
+
+  backTipDisplays: 0,
+  outsideTipDisplays: 0,
+  abandonmentCount: 0,
+
+  deepNavigationCreditGranted: false,
+  lastActivityTime: Date.now(),
+
+  backTipTimerId: null,
+  outsideTipTimerId: null,
+  abandonmentTimerId: null,
+  farewellTimerId: null,
+  homeIdleTimerId: null,
+  farewellIsActive: false
+};
 
 /* =========================================================
    INITIALIZATION
@@ -61,26 +141,22 @@ function initializeKioskNavigation() {
   initializeModalListeners();
   resetIframeToBlankPage();
   updateBackButtonVisibility();
+  scheduleHomeIdleNewUserReset();
 }
 
-/*
-  Stop initialization early if the revised index.html is not in place.
-  This gives a useful console message rather than causing later null errors.
-*/
 function validateRequiredParentElements() {
-  const missingElementIds = [];
+  const requiredElements = {
+    modalOverlay,
+    content: contentFrame,
+    modalBackButton,
+    backButtonTip,
+    outsideTapTip,
+    farewellTip
+  };
 
-  if (!modalOverlay) {
-    missingElementIds.push("modalOverlay");
-  }
-
-  if (!contentFrame) {
-    missingElementIds.push("content");
-  }
-
-  if (!modalBackButton) {
-    missingElementIds.push("modalBackButton");
-  }
+  const missingElementIds = Object.entries(requiredElements)
+    .filter(([, element]) => !element)
+    .map(([elementId]) => elementId);
 
   if (missingElementIds.length > 0) {
     console.error(
@@ -93,7 +169,7 @@ function validateRequiredParentElements() {
 }
 
 /* =========================================================
-   MAIN-MENU EVENT LISTENERS
+   MAIN-MENU LISTENERS
    ========================================================= */
 
 function initializeMainMenuListeners() {
@@ -105,6 +181,10 @@ function initializeMainMenuListeners() {
   }
 
   mainMenuHotspots.forEach((hotspotButton) => {
+    hotspotButton.addEventListener("pointerdown", () => {
+      cancelHomeIdleNewUserReset();
+    });
+
     hotspotButton.addEventListener("click", () => {
       const startingPagePath = hotspotButton.dataset.contentPage;
 
@@ -121,28 +201,20 @@ function initializeMainMenuListeners() {
 }
 
 /* =========================================================
-   MODAL EVENT LISTENERS
+   MODAL AND IFRAME LISTENERS
    ========================================================= */
 
 function initializeModalListeners() {
   modalBackButton.addEventListener("click", (event) => {
-    /*
-      Prevent the Back-button click from bubbling to the overlay and being
-      mistaken for an outside click.
-    */
     event.stopPropagation();
+    registerLearnedInteraction("back");
     navigateBackOnePage();
   });
 
-  modalOverlay.addEventListener("click", (event) => {
-    /*
-      Close only when the dark overlay itself is clicked.
-
-      Clicks inside the iframe do not bubble into the parent document.
-      The explicit target check also protects the parent Back button.
-    */
+  modalOverlay.addEventListener("pointerdown", (event) => {
     if (event.target === modalOverlay) {
-      closeAndResetKioskModal();
+      registerLearnedInteraction("outside-close");
+      closeAndResetKioskModal({ scheduleHomeReset: true });
     }
   });
 
@@ -151,25 +223,54 @@ function initializeModalListeners() {
       event.key === "Escape" &&
       !modalOverlay.classList.contains("hidden")
     ) {
-      closeAndResetKioskModal();
+      closeAndResetKioskModal({ scheduleHomeReset: true });
     }
   });
 
-  /*
-    Useful during development: the load event confirms that the iframe
-    navigated. Fully Kiosk Browser may not provide a reliable parent-level
-    error event for a missing local HTML file, so missing paths should also
-    be checked through the browser console during setup.
-  */
   contentFrame.addEventListener("load", () => {
+    attachIframeActivityListeners();
+
+    if (!modalOverlay.classList.contains("hidden")) {
+      restartInactivitySequence();
+    }
+
     console.info(
       `Kiosk iframe loaded: ${currentContentPagePath || contentFrame.src}`
     );
   });
 }
 
+function attachIframeActivityListeners() {
+  try {
+    const iframeDocument = contentFrame.contentDocument;
+
+    if (!iframeDocument || iframeDocument.__kioskActivityListenerAttached) {
+      return;
+    }
+
+    iframeDocument.__kioskActivityListenerAttached = true;
+
+    iframeDocument.addEventListener(
+      "pointerdown",
+      () => registerKioskActivity("content-touch"),
+      { passive: true }
+    );
+
+    iframeDocument.addEventListener(
+      "keydown",
+      () => registerKioskActivity("content-keyboard"),
+      { passive: true }
+    );
+  } catch (error) {
+    console.warn(
+      "Unable to attach iframe activity tracking. Serve the kiosk through the local HTTP server so the parent and iframe share one origin.",
+      error
+    );
+  }
+}
+
 /* =========================================================
-   OPENING AND CLOSING THE MODAL
+   OPENING, CLOSING, AND NEW-USER RESET
    ========================================================= */
 
 function openKioskModal(startingPagePath) {
@@ -178,23 +279,26 @@ function openKioskModal(startingPagePath) {
     return;
   }
 
-  /*
-    Every main-menu selection starts a completely new navigation session.
-    This prevents a previous user's drill-down history from being reused.
-  */
+  cancelHomeIdleNewUserReset();
+  cancelFarewellSequence();
+
   contentNavigationHistory = [];
   currentContentPagePath = null;
   modalStartingPagePath = startingPagePath;
 
-  loadContentPage(startingPagePath);
-
   modalOverlay.classList.remove("hidden");
   modalOverlay.setAttribute("aria-hidden", "false");
 
+  loadContentPage(startingPagePath);
   updateBackButtonVisibility();
+  registerKioskActivity("modal-open");
 }
 
-function closeAndResetKioskModal() {
+function closeAndResetKioskModal({ scheduleHomeReset = true } = {}) {
+  clearInactivityTimers();
+  cancelFarewellSequence();
+  hideAllCoachingTips();
+
   modalOverlay.classList.add("hidden");
   modalOverlay.setAttribute("aria-hidden", "true");
 
@@ -202,29 +306,55 @@ function closeAndResetKioskModal() {
   currentContentPagePath = null;
   modalStartingPagePath = null;
 
-  /*
-    Clearing the iframe prevents the last content page from briefly appearing
-    the next time the modal is opened.
-  */
   resetIframeToBlankPage();
   updateBackButtonVisibility();
+
+  if (scheduleHomeReset) {
+    scheduleHomeIdleNewUserReset();
+  }
+}
+
+function scheduleHomeIdleNewUserReset() {
+  cancelHomeIdleNewUserReset();
+
+  kioskSession.homeIdleTimerId = window.setTimeout(() => {
+    beginNewUserSession();
+  }, coachingSettings.homeIdleNewUserDelay);
+}
+
+function cancelHomeIdleNewUserReset() {
+  if (kioskSession.homeIdleTimerId !== null) {
+    window.clearTimeout(kioskSession.homeIdleTimerId);
+    kioskSession.homeIdleTimerId = null;
+  }
+}
+
+function beginNewUserSession() {
+  clearAllSessionTimers();
+  hideAllCoachingTips();
+
+  kioskSession.sessionId += 1;
+  kioskSession.familiarityLevel = 0;
+
+  kioskSession.backActions = 0;
+  kioskSession.outsideCloseActions = 0;
+  kioskSession.forwardNavigations = 0;
+  kioskSession.deepNavigationActions = 0;
+  kioskSession.deepestNavigationLevel = 0;
+
+  kioskSession.backTipDisplays = 0;
+  kioskSession.outsideTipDisplays = 0;
+  kioskSession.deepNavigationCreditGranted = false;
+  kioskSession.lastActivityTime = Date.now();
+  kioskSession.farewellIsActive = false;
+
+  console.info(`Started kiosk user session ${kioskSession.sessionId}.`);
 }
 
 /* =========================================================
-   FORWARD NAVIGATION
+   FORWARD AND BACK NAVIGATION
    ========================================================= */
 
-/*
-  This is the public navigation function used by child iframe pages.
-
-  Example child-page hotspot:
-    window.parent.navigateContentPage(
-      "content/products/bar-feeders/index.html"
-    );
-
-  The supplied path should be relative to the root index.html, not relative
-  to the child page that is currently loaded.
-*/
 function navigateContentPage(destinationPagePath) {
   if (!isValidContentPath(destinationPagePath)) {
     console.error(
@@ -233,26 +363,20 @@ function navigateContentPage(destinationPagePath) {
     return;
   }
 
+  registerKioskActivity("forward-navigation");
+
   if (currentContentPagePath) {
     contentNavigationHistory.push(currentContentPagePath);
   }
+
+  kioskSession.forwardNavigations += 1;
+  updateNavigationDepthMetrics();
 
   loadContentPage(destinationPagePath);
   updateBackButtonVisibility();
 }
 
-/*
-  Expose the parent navigation function so same-origin iframe pages can call
-  window.parent.navigateContentPage(...).
-
-  This should be tested once in Fully Kiosk Browser before building the full
-  page tree because Android WebView settings can affect local file access.
-*/
 window.navigateContentPage = navigateContentPage;
-
-/* =========================================================
-   BACK NAVIGATION
-   ========================================================= */
 
 function navigateBackOnePage() {
   if (contentNavigationHistory.length === 0) {
@@ -261,13 +385,9 @@ function navigateBackOnePage() {
   }
 
   const previousPagePath = contentNavigationHistory.pop();
-
-  /*
-    Back navigation loads the prior page directly and does not push the
-    current page into history again.
-  */
   loadContentPage(previousPagePath);
   updateBackButtonVisibility();
+  restartInactivitySequence();
 }
 
 function updateBackButtonVisibility() {
@@ -275,14 +395,213 @@ function updateBackButtonVisibility() {
 
   modalBackButton.classList.toggle("hidden", shouldHideBackButton);
   modalBackButton.disabled = shouldHideBackButton;
-  modalBackButton.setAttribute(
-    "aria-hidden",
-    String(shouldHideBackButton)
+  modalBackButton.setAttribute("aria-hidden", String(shouldHideBackButton));
+
+  if (shouldHideBackButton) {
+    backButtonTip.classList.remove("is-visible");
+    modalBackButton.classList.remove("coaching-highlight");
+  }
+}
+
+function updateNavigationDepthMetrics() {
+  const currentDepth = contentNavigationHistory.length + 1;
+
+  kioskSession.deepestNavigationLevel = Math.max(
+    kioskSession.deepestNavigationLevel,
+    currentDepth
+  );
+
+  if (
+    currentDepth >= coachingSettings.deepNavigationThreshold &&
+    !kioskSession.deepNavigationCreditGranted
+  ) {
+    kioskSession.deepNavigationCreditGranted = true;
+    kioskSession.deepNavigationActions += 1;
+    increaseFamiliarityLevel();
+  }
+}
+
+/* =========================================================
+   FAMILIARITY AND ACTION COUNTERS
+   ========================================================= */
+
+function registerLearnedInteraction(interactionType) {
+  if (interactionType === "back") {
+    kioskSession.backActions += 1;
+  }
+
+  if (interactionType === "outside-close") {
+    kioskSession.outsideCloseActions += 1;
+  }
+
+  increaseFamiliarityLevel();
+}
+
+function increaseFamiliarityLevel() {
+  kioskSession.familiarityLevel = Math.min(
+    kioskSession.familiarityLevel + 1,
+    coachingSettings.maximumFamiliarityLevel
   );
 }
 
 /* =========================================================
-   IFRAME PAGE LOADING
+   INACTIVITY COACHING
+   ========================================================= */
+
+function registerKioskActivity(activityType) {
+  kioskSession.lastActivityTime = Date.now();
+
+  if (kioskSession.farewellIsActive) {
+    cancelFarewellSequence();
+  }
+
+  hideAllCoachingTips();
+  clearInactivityTimers();
+
+  if (!modalOverlay.classList.contains("hidden")) {
+    restartInactivitySequence();
+  }
+
+  console.debug(`Kiosk activity: ${activityType}`);
+}
+
+function restartInactivitySequence() {
+  clearInactivityTimers();
+  hideAllCoachingTips();
+
+  if (modalOverlay.classList.contains("hidden")) {
+    return;
+  }
+
+  const backTipDelay = getBackTipDelay();
+  const backIsAvailable = contentNavigationHistory.length > 0;
+  const outsideTipDelay = backIsAvailable
+    ? backTipDelay + coachingSettings.outsideTipAdditionalDelay
+    : backTipDelay;
+
+  if (backIsAvailable) {
+    kioskSession.backTipTimerId = window.setTimeout(
+      showBackInstruction,
+      backTipDelay
+    );
+  }
+
+  kioskSession.outsideTipTimerId = window.setTimeout(
+    showOutsideTapInstruction,
+    outsideTipDelay
+  );
+
+  kioskSession.abandonmentTimerId = window.setTimeout(
+    beginAbandonmentSequence,
+    getAbandonmentDelay()
+  );
+}
+
+function getBackTipDelay() {
+  return Math.min(
+    coachingSettings.initialBackTipDelay *
+      Math.pow(
+        coachingSettings.coachingDelayMultiplier,
+        kioskSession.familiarityLevel
+      ),
+    coachingSettings.maximumBackTipDelay
+  );
+}
+
+function getAbandonmentDelay() {
+  return Math.min(
+    coachingSettings.initialAbandonmentDelay *
+      Math.pow(
+        coachingSettings.abandonmentDelayMultiplier,
+        kioskSession.familiarityLevel
+      ),
+    coachingSettings.maximumAbandonmentDelay
+  );
+}
+
+function showBackInstruction() {
+  if (
+    modalOverlay.classList.contains("hidden") ||
+    contentNavigationHistory.length === 0
+  ) {
+    return;
+  }
+
+  kioskSession.backTipDisplays += 1;
+  modalBackButton.classList.add("coaching-highlight");
+  backButtonTip.classList.add("is-visible");
+}
+
+function showOutsideTapInstruction() {
+  if (modalOverlay.classList.contains("hidden")) {
+    return;
+  }
+
+  kioskSession.outsideTipDisplays += 1;
+  outsideTapTip.classList.add("is-visible");
+}
+
+function hideAllCoachingTips() {
+  backButtonTip.classList.remove("is-visible");
+  outsideTapTip.classList.remove("is-visible");
+  farewellTip.classList.remove("is-visible");
+  modalBackButton.classList.remove("coaching-highlight");
+}
+
+function clearInactivityTimers() {
+  const timerKeys = [
+    "backTipTimerId",
+    "outsideTipTimerId",
+    "abandonmentTimerId"
+  ];
+
+  timerKeys.forEach((timerKey) => {
+    if (kioskSession[timerKey] !== null) {
+      window.clearTimeout(kioskSession[timerKey]);
+      kioskSession[timerKey] = null;
+    }
+  });
+}
+
+/* =========================================================
+   ABANDONMENT AND FAREWELL
+   ========================================================= */
+
+function beginAbandonmentSequence() {
+  clearInactivityTimers();
+  hideAllCoachingTips();
+
+  kioskSession.abandonmentCount += 1;
+  kioskSession.farewellIsActive = true;
+  farewellTip.classList.add("is-visible");
+
+  kioskSession.farewellTimerId = window.setTimeout(() => {
+    kioskSession.farewellTimerId = null;
+    kioskSession.farewellIsActive = false;
+
+    closeAndResetKioskModal({ scheduleHomeReset: false });
+    beginNewUserSession();
+  }, coachingSettings.farewellDisplayDuration);
+}
+
+function cancelFarewellSequence() {
+  if (kioskSession.farewellTimerId !== null) {
+    window.clearTimeout(kioskSession.farewellTimerId);
+    kioskSession.farewellTimerId = null;
+  }
+
+  kioskSession.farewellIsActive = false;
+  farewellTip.classList.remove("is-visible");
+}
+
+function clearAllSessionTimers() {
+  clearInactivityTimers();
+  cancelFarewellSequence();
+  cancelHomeIdleNewUserReset();
+}
+
+/* =========================================================
+   IFRAME PAGE LOADING AND PATH VALIDATION
    ========================================================= */
 
 function loadContentPage(pagePath) {
@@ -292,21 +611,12 @@ function loadContentPage(pagePath) {
   }
 
   currentContentPagePath = pagePath;
-
-  /*
-    Assigning src is used instead of fetch() so the project remains compatible
-    with a local file-based kiosk deployment.
-  */
   contentFrame.src = pagePath;
 }
 
 function resetIframeToBlankPage() {
   contentFrame.src = "about:blank";
 }
-
-/* =========================================================
-   PATH VALIDATION
-   ========================================================= */
 
 function isValidContentPath(pagePath) {
   return (
