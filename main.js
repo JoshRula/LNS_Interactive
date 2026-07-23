@@ -1,627 +1,286 @@
-/*
-  Parent-page navigation and session coaching controller.
+* {
+  box-sizing: border-box;
+}
 
-  The parent page owns:
-  - iframe navigation history
-  - Back and outside-to-close behavior
-  - inactivity coaching
-  - abandonment/farewell behavior
-  - per-user familiarity counters
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #000000;
+}
 
-  Child iframe pages continue to navigate by calling:
-
-    window.parent.navigateContentPage("content/example/index.html");
-*/
-
-document.addEventListener("DOMContentLoaded", () => {
-  initializeRotatedViewport();
-  initializeKioskNavigation();
-});
-
-
-/* =========================================================
-   ROTATED PORTRAIT VIEWPORT
-   ========================================================= */
+body {
+  position: relative;
+  font-family: Arial, Helvetica, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
 
 /*
-  The kiosk is authored as a fixed 1080 x 1920 portrait canvas, while Android
-  and Fully Kiosk remain in landscape. CSS rotates the canvas. This function
-  scales it to fit the actual browser viewport without changing any existing
-  page coordinates.
+  Android and Fully remain in landscape. This single wrapper preserves the
+  existing 1080 x 1920 portrait design and rotates it into the physical
+  landscape browser viewport.
 
-  After a 90-degree rotation, the portrait canvas occupies:
-    1920 logical pixels of browser width
-    1080 logical pixels of browser height
+  Change rotate(-90deg) to rotate(90deg) to flip the portrait direction.
+  --kiosk-scale is calculated in main.js so the design also fits resolutions
+  other than 1920 x 1080.
 */
-function initializeRotatedViewport() {
-  const rotationViewport = document.getElementById("rotationViewport");
+.rotation-viewport {
+  --kiosk-scale: 1;
 
-  if (!rotationViewport) {
-    console.error("Rotated viewport could not initialize. Missing element: rotationViewport");
-    return;
-  }
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  width: 1080px;
+  height: 1920px;
+  overflow: hidden;
+  transform-origin: center center;
+  transform:
+    translate(-50%, -50%)
+    rotate(-90deg)
+    scale(var(--kiosk-scale));
+  background: #b50029;
+}
 
-  const updateRotatedViewportScale = () => {
-    const availableWidth = window.innerWidth;
-    const availableHeight = window.innerHeight;
-
-    const widthScale = availableWidth / 1920;
-    const heightScale = availableHeight / 1080;
-    const fittedScale = Math.min(widthScale, heightScale);
-
-    rotationViewport.style.setProperty(
-      "--kiosk-scale",
-      String(fittedScale)
-    );
-  };
-
-  updateRotatedViewportScale();
-  window.addEventListener("resize", updateRotatedViewportScale);
-  window.addEventListener("orientationchange", updateRotatedViewportScale);
+:root {
+  --clickable-border: 2px solid rgba(255, 255, 255, 0.75);
+  --modal-back-button-opacity: 0.10;
+  --modal-back-button-active-opacity: 1;
+  --tip-fade-duration: 500ms;
 }
 
 /* =========================================================
-   CONFIGURATION
+   MAIN KIOSK LAYOUT
    ========================================================= */
 
-const coachingSettings = {
-  initialBackTipDelay: 3000,
-  outsideTipAdditionalDelay: 1000,
-  coachingDelayMultiplier: 2,
-  maximumBackTipDelay: 24000,
-
-  initialAbandonmentDelay: 25000,
-  abandonmentDelayMultiplier: 1.4,
-  maximumAbandonmentDelay: 70000,
-
-  farewellDisplayDuration: 3000,
-  homeIdleNewUserDelay: 7000,
-  maximumFamiliarityLevel: 3,
-  deepNavigationThreshold: 3
-};
-
-/* =========================================================
-   DOM REFERENCES
-   ========================================================= */
-
-const modalOverlay = document.getElementById("modalOverlay");
-const contentFrame = document.getElementById("content");
-const modalBackButton = document.getElementById("modalBackButton");
-const backButtonTip = document.getElementById("backButtonTip");
-const outsideTapTip = document.getElementById("outsideTapTip");
-const farewellTip = document.getElementById("farewellTip");
-
-const mainMenuHotspots = document.querySelectorAll(
-  ".main-menu-hotspot[data-content-page]"
-);
-
-/* =========================================================
-   NAVIGATION AND SESSION STATE
-   ========================================================= */
-
-let contentNavigationHistory = [];
-let currentContentPagePath = null;
-let modalStartingPagePath = null;
-
-const kioskSession = {
-  sessionId: 1,
-  familiarityLevel: 0,
-
-  backActions: 0,
-  outsideCloseActions: 0,
-  forwardNavigations: 0,
-  deepNavigationActions: 0,
-  deepestNavigationLevel: 0,
-
-  backTipDisplays: 0,
-  outsideTipDisplays: 0,
-  abandonmentCount: 0,
-
-  deepNavigationCreditGranted: false,
-  lastActivityTime: Date.now(),
-
-  backTipTimerId: null,
-  outsideTipTimerId: null,
-  abandonmentTimerId: null,
-  farewellTimerId: null,
-  homeIdleTimerId: null,
-  farewellIsActive: false
-};
-
-/* =========================================================
-   INITIALIZATION
-   ========================================================= */
-
-function initializeKioskNavigation() {
-  if (!validateRequiredParentElements()) {
-    return;
-  }
-
-  initializeMainMenuListeners();
-  initializeModalListeners();
-  resetIframeToBlankPage();
-  updateBackButtonVisibility();
-  scheduleHomeIdleNewUserReset();
+#screenSize {
+  position: relative;
+  width: 1080px;
+  height: 1920px;
+  overflow: hidden;
+  background: #b50029;
 }
 
-function validateRequiredParentElements() {
-  const requiredElements = {
-    modalOverlay,
-    content: contentFrame,
-    modalBackButton,
-    backButtonTip,
-    outsideTapTip,
-    farewellTip
-  };
+.row {
+  position: absolute;
+  left: 0;
+  width: 1080px;
+  overflow: visible;
+}
 
-  const missingElementIds = Object.entries(requiredElements)
-    .filter(([, element]) => !element)
-    .map(([elementId]) => elementId);
-
-  if (missingElementIds.length > 0) {
-    console.error(
-      `Kiosk navigation could not initialize. Missing element(s): ${missingElementIds.join(", ")}`
-    );
-    return false;
-  }
-
-  return true;
+.element {
+  position: absolute;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.08);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
 }
 
 /* =========================================================
-   MAIN-MENU LISTENERS
+   MAIN-MENU HOTSPOTS
    ========================================================= */
 
-function initializeMainMenuListeners() {
-  if (mainMenuHotspots.length === 0) {
-    console.warn(
-      "No main-menu hotspots were found with a data-content-page attribute."
-    );
-    return;
-  }
+.main-menu-hotspot {
+  position: absolute;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  pointer-events: auto;
+  appearance: none;
+  -webkit-appearance: none;
+}
 
-  mainMenuHotspots.forEach((hotspotButton) => {
-    hotspotButton.addEventListener("pointerdown", () => {
-      cancelHomeIdleNewUserReset();
-    });
+.main-menu-hotspot:focus-visible {
+  outline: 3px solid rgba(255, 255, 255, 0.9);
+  outline-offset: -3px;
+}
 
-    hotspotButton.addEventListener("click", () => {
-      const startingPagePath = hotspotButton.dataset.contentPage;
-
-      if (!isValidContentPath(startingPagePath)) {
-        console.error(
-          `Main-menu hotspot "${hotspotButton.id}" does not have a valid data-content-page path.`
-        );
-        return;
-      }
-
-      openKioskModal(startingPagePath);
-    });
-  });
+body.show-main-menu-hotspot-debugging .main-menu-hotspot {
+  border: var(--clickable-border);
+  background: rgba(255, 255, 255, 0.10);
 }
 
 /* =========================================================
-   MODAL AND IFRAME LISTENERS
+   FULL-SCREEN MODAL OVERLAY
    ========================================================= */
 
-function initializeModalListeners() {
-  modalBackButton.addEventListener("click", (event) => {
-    event.stopPropagation();
-    registerLearnedInteraction("back");
-    navigateBackOnePage();
-  });
-
-  modalOverlay.addEventListener("pointerdown", (event) => {
-    if (event.target === modalOverlay) {
-      registerLearnedInteraction("outside-close");
-      closeAndResetKioskModal({ scheduleHomeReset: true });
-    }
-  });
-
-  window.addEventListener("keydown", (event) => {
-    if (
-      event.key === "Escape" &&
-      !modalOverlay.classList.contains("hidden")
-    ) {
-      closeAndResetKioskModal({ scheduleHomeReset: true });
-    }
-  });
-
-  contentFrame.addEventListener("load", () => {
-    attachIframeActivityListeners();
-
-    if (!modalOverlay.classList.contains("hidden")) {
-      restartInactivitySequence();
-    }
-
-    console.info(
-      `Kiosk iframe loaded: ${currentContentPagePath || contentFrame.src}`
-    );
-  });
+.modal-overlay {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1080px;
+  height: 1920px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.72);
+  z-index: 50;
 }
 
-function attachIframeActivityListeners() {
-  try {
-    const iframeDocument = contentFrame.contentDocument;
-
-    if (!iframeDocument || iframeDocument.__kioskActivityListenerAttached) {
-      return;
-    }
-
-    iframeDocument.__kioskActivityListenerAttached = true;
-
-    iframeDocument.addEventListener(
-      "pointerdown",
-      () => registerKioskActivity("content-touch"),
-      { passive: true }
-    );
-
-    iframeDocument.addEventListener(
-      "keydown",
-      () => registerKioskActivity("content-keyboard"),
-      { passive: true }
-    );
-  } catch (error) {
-    console.warn(
-      "Unable to attach iframe activity tracking. Serve the kiosk through the local HTTP server so the parent and iframe share one origin.",
-      error
-    );
-  }
+.modal-overlay.hidden {
+  display: none;
 }
 
 /* =========================================================
-   OPENING, CLOSING, AND NEW-USER RESET
+   CONTENT IFRAME
    ========================================================= */
 
-function openKioskModal(startingPagePath) {
-  if (!isValidContentPath(startingPagePath)) {
-    console.error(`Cannot open invalid kiosk page path: ${startingPagePath}`);
-    return;
-  }
-
-  cancelHomeIdleNewUserReset();
-  cancelFarewellSequence();
-
-  contentNavigationHistory = [];
-  currentContentPagePath = null;
-  modalStartingPagePath = startingPagePath;
-
-  modalOverlay.classList.remove("hidden");
-  modalOverlay.setAttribute("aria-hidden", "false");
-
-  loadContentPage(startingPagePath);
-  updateBackButtonVisibility();
-  registerKioskActivity("modal-open");
+.modal-content-frame {
+  position: absolute;
+  left: 10px;
+  top: 380px;
+  width: 1060px;
+  max-width: 100%;
+  aspect-ratio: 16 / 9;
+  height: auto;
+  display: block;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border: none;
+  background: #ffffff;
+  box-shadow: 0 0 40px rgba(0, 0, 0, 0.75);
+  z-index: 51;
 }
 
-function closeAndResetKioskModal({ scheduleHomeReset = true } = {}) {
-  clearInactivityTimers();
-  cancelFarewellSequence();
-  hideAllCoachingTips();
-
-  modalOverlay.classList.add("hidden");
-  modalOverlay.setAttribute("aria-hidden", "true");
-
-  contentNavigationHistory = [];
-  currentContentPagePath = null;
-  modalStartingPagePath = null;
-
-  resetIframeToBlankPage();
-  updateBackButtonVisibility();
-
-  if (scheduleHomeReset) {
-    scheduleHomeIdleNewUserReset();
-  }
-}
-
-function scheduleHomeIdleNewUserReset() {
-  cancelHomeIdleNewUserReset();
-
-  kioskSession.homeIdleTimerId = window.setTimeout(() => {
-    beginNewUserSession();
-  }, coachingSettings.homeIdleNewUserDelay);
-}
-
-function cancelHomeIdleNewUserReset() {
-  if (kioskSession.homeIdleTimerId !== null) {
-    window.clearTimeout(kioskSession.homeIdleTimerId);
-    kioskSession.homeIdleTimerId = null;
-  }
-}
-
-function beginNewUserSession() {
-  clearAllSessionTimers();
-  hideAllCoachingTips();
-
-  kioskSession.sessionId += 1;
-  kioskSession.familiarityLevel = 0;
-
-  kioskSession.backActions = 0;
-  kioskSession.outsideCloseActions = 0;
-  kioskSession.forwardNavigations = 0;
-  kioskSession.deepNavigationActions = 0;
-  kioskSession.deepestNavigationLevel = 0;
-
-  kioskSession.backTipDisplays = 0;
-  kioskSession.outsideTipDisplays = 0;
-  kioskSession.deepNavigationCreditGranted = false;
-  kioskSession.lastActivityTime = Date.now();
-  kioskSession.farewellIsActive = false;
-
-  console.info(`Started kiosk user session ${kioskSession.sessionId}.`);
+.modal-content-frame:focus {
+  outline: none;
 }
 
 /* =========================================================
-   FORWARD AND BACK NAVIGATION
+   SHARED BACK CHEVRON
    ========================================================= */
 
-function navigateContentPage(destinationPagePath) {
-  if (!isValidContentPath(destinationPagePath)) {
-    console.error(
-      `Cannot navigate to invalid kiosk page path: ${destinationPagePath}`
-    );
-    return;
-  }
-
-  registerKioskActivity("forward-navigation");
-
-  if (currentContentPagePath) {
-    contentNavigationHistory.push(currentContentPagePath);
-  }
-
-  kioskSession.forwardNavigations += 1;
-  updateNavigationDepthMetrics();
-
-  loadContentPage(destinationPagePath);
-  updateBackButtonVisibility();
+.modal-back-button {
+  position: absolute;
+  left: 10px;
+  top: 690px;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 75px;
+  height: 350px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: #ff1f1f;
+  cursor: pointer;
+  opacity: var(--modal-back-button-opacity);
+  transition:
+    opacity var(--tip-fade-duration) ease,
+    background-color 180ms ease-in-out;
+  z-index: 60;
+  pointer-events: auto;
+  appearance: none;
+  -webkit-appearance: none;
 }
 
-window.navigateContentPage = navigateContentPage;
-
-function navigateBackOnePage() {
-  if (contentNavigationHistory.length === 0) {
-    updateBackButtonVisibility();
-    return;
-  }
-
-  const previousPagePath = contentNavigationHistory.pop();
-  loadContentPage(previousPagePath);
-  updateBackButtonVisibility();
-  restartInactivitySequence();
+.modal-back-button:hover,
+.modal-back-button:focus-visible,
+.modal-back-button.coaching-highlight {
+  opacity: var(--modal-back-button-active-opacity);
+  outline: none;
 }
 
-function updateBackButtonVisibility() {
-  const shouldHideBackButton = contentNavigationHistory.length === 0;
-
-  modalBackButton.classList.toggle("hidden", shouldHideBackButton);
-  modalBackButton.disabled = shouldHideBackButton;
-  modalBackButton.setAttribute("aria-hidden", String(shouldHideBackButton));
-
-  if (shouldHideBackButton) {
-    backButtonTip.classList.remove("is-visible");
-    modalBackButton.classList.remove("coaching-highlight");
-  }
+.modal-back-button:active {
+  background: rgba(255, 0, 0, 0.22);
 }
 
-function updateNavigationDepthMetrics() {
-  const currentDepth = contentNavigationHistory.length + 1;
+.modal-back-button.hidden {
+  display: none;
+}
 
-  kioskSession.deepestNavigationLevel = Math.max(
-    kioskSession.deepestNavigationLevel,
-    currentDepth
-  );
-
-  if (
-    currentDepth >= coachingSettings.deepNavigationThreshold &&
-    !kioskSession.deepNavigationCreditGranted
-  ) {
-    kioskSession.deepNavigationCreditGranted = true;
-    kioskSession.deepNavigationActions += 1;
-    increaseFamiliarityLevel();
-  }
+.modal-back-button svg {
+  display: block;
+  width: auto;
+  height: 480px;
+  pointer-events: none;
 }
 
 /* =========================================================
-   FAMILIARITY AND ACTION COUNTERS
+   SESSION COACHING TIPS
    ========================================================= */
 
-function registerLearnedInteraction(interactionType) {
-  if (interactionType === "back") {
-    kioskSession.backActions += 1;
-  }
-
-  if (interactionType === "outside-close") {
-    kioskSession.outsideCloseActions += 1;
-  }
-
-  increaseFamiliarityLevel();
+.kiosk-tip {
+  position: absolute;
+  z-index: 70;
+  color: #ffffff;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: center;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity var(--tip-fade-duration) ease,
+    visibility 0s linear var(--tip-fade-duration);
 }
 
-function increaseFamiliarityLevel() {
-  kioskSession.familiarityLevel = Math.min(
-    kioskSession.familiarityLevel + 1,
-    coachingSettings.maximumFamiliarityLevel
-  );
+.kiosk-tip.is-visible {
+  opacity: 1;
+  visibility: visible;
+  transition:
+    opacity var(--tip-fade-duration) ease,
+    visibility 0s linear 0s;
+}
+
+.back-button-tip {
+  left: 18px;
+  top: 425px;
+  width: 340px;
+  padding: 14px 18px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.78);
+  font-size: 25px;
+  text-align: left;
+}
+
+.outside-tap-tip {
+  left: 50%;
+  top: 1035px;
+  transform: translateX(-50%);
+  width: 700px;
+  padding: 16px 24px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.78);
+  font-size: 27px;
+}
+
+.farewell-tip {
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 700px;
+  padding: 32px 42px;
+  border-radius: 16px;
+  background: rgba(0, 0, 0, 0.88);
+  font-size: 38px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45);
 }
 
 /* =========================================================
-   INACTIVITY COACHING
+   OPTIONAL LAYOUT DEBUGGING
    ========================================================= */
 
-function registerKioskActivity(activityType) {
-  kioskSession.lastActivityTime = Date.now();
-
-  if (kioskSession.farewellIsActive) {
-    cancelFarewellSequence();
-  }
-
-  hideAllCoachingTips();
-  clearInactivityTimers();
-
-  if (!modalOverlay.classList.contains("hidden")) {
-    restartInactivitySequence();
-  }
-
-  console.debug(`Kiosk activity: ${activityType}`);
+body.show-kiosk-layout-debugging #screenSize {
+  outline: 2px solid rgba(255, 255, 255, 0.75);
 }
 
-function restartInactivitySequence() {
-  clearInactivityTimers();
-  hideAllCoachingTips();
-
-  if (modalOverlay.classList.contains("hidden")) {
-    return;
-  }
-
-  const backTipDelay = getBackTipDelay();
-  const backIsAvailable = contentNavigationHistory.length > 0;
-  const outsideTipDelay = backIsAvailable
-    ? backTipDelay + coachingSettings.outsideTipAdditionalDelay
-    : backTipDelay;
-
-  if (backIsAvailable) {
-    kioskSession.backTipTimerId = window.setTimeout(
-      showBackInstruction,
-      backTipDelay
-    );
-  }
-
-  kioskSession.outsideTipTimerId = window.setTimeout(
-    showOutsideTapInstruction,
-    outsideTipDelay
-  );
-
-  kioskSession.abandonmentTimerId = window.setTimeout(
-    beginAbandonmentSequence,
-    getAbandonmentDelay()
-  );
+body.show-kiosk-layout-debugging .row {
+  outline: 2px solid rgba(255, 255, 255, 0.55);
 }
 
-function getBackTipDelay() {
-  return Math.min(
-    coachingSettings.initialBackTipDelay *
-      Math.pow(
-        coachingSettings.coachingDelayMultiplier,
-        kioskSession.familiarityLevel
-      ),
-    coachingSettings.maximumBackTipDelay
-  );
+body.show-kiosk-layout-debugging .element {
+  outline: 2px solid rgba(255, 255, 255, 0.80);
 }
 
-function getAbandonmentDelay() {
-  return Math.min(
-    coachingSettings.initialAbandonmentDelay *
-      Math.pow(
-        coachingSettings.abandonmentDelayMultiplier,
-        kioskSession.familiarityLevel
-      ),
-    coachingSettings.maximumAbandonmentDelay
-  );
-}
-
-function showBackInstruction() {
-  if (
-    modalOverlay.classList.contains("hidden") ||
-    contentNavigationHistory.length === 0
-  ) {
-    return;
-  }
-
-  kioskSession.backTipDisplays += 1;
-  modalBackButton.classList.add("coaching-highlight");
-  backButtonTip.classList.add("is-visible");
-}
-
-function showOutsideTapInstruction() {
-  if (modalOverlay.classList.contains("hidden")) {
-    return;
-  }
-
-  kioskSession.outsideTipDisplays += 1;
-  outsideTapTip.classList.add("is-visible");
-}
-
-function hideAllCoachingTips() {
-  backButtonTip.classList.remove("is-visible");
-  outsideTapTip.classList.remove("is-visible");
-  farewellTip.classList.remove("is-visible");
-  modalBackButton.classList.remove("coaching-highlight");
-}
-
-function clearInactivityTimers() {
-  const timerKeys = [
-    "backTipTimerId",
-    "outsideTipTimerId",
-    "abandonmentTimerId"
-  ];
-
-  timerKeys.forEach((timerKey) => {
-    if (kioskSession[timerKey] !== null) {
-      window.clearTimeout(kioskSession[timerKey]);
-      kioskSession[timerKey] = null;
-    }
-  });
-}
-
-/* =========================================================
-   ABANDONMENT AND FAREWELL
-   ========================================================= */
-
-function beginAbandonmentSequence() {
-  clearInactivityTimers();
-  hideAllCoachingTips();
-
-  kioskSession.abandonmentCount += 1;
-  kioskSession.farewellIsActive = true;
-  farewellTip.classList.add("is-visible");
-
-  kioskSession.farewellTimerId = window.setTimeout(() => {
-    kioskSession.farewellTimerId = null;
-    kioskSession.farewellIsActive = false;
-
-    closeAndResetKioskModal({ scheduleHomeReset: false });
-    beginNewUserSession();
-  }, coachingSettings.farewellDisplayDuration);
-}
-
-function cancelFarewellSequence() {
-  if (kioskSession.farewellTimerId !== null) {
-    window.clearTimeout(kioskSession.farewellTimerId);
-    kioskSession.farewellTimerId = null;
-  }
-
-  kioskSession.farewellIsActive = false;
-  farewellTip.classList.remove("is-visible");
-}
-
-function clearAllSessionTimers() {
-  clearInactivityTimers();
-  cancelFarewellSequence();
-  cancelHomeIdleNewUserReset();
-}
-
-/* =========================================================
-   IFRAME PAGE LOADING AND PATH VALIDATION
-   ========================================================= */
-
-function loadContentPage(pagePath) {
-  if (!isValidContentPath(pagePath)) {
-    console.error(`Refusing to load invalid kiosk page path: ${pagePath}`);
-    return;
-  }
-
-  currentContentPagePath = pagePath;
-  contentFrame.src = pagePath;
-}
-
-function resetIframeToBlankPage() {
-  contentFrame.src = "about:blank";
-}
-
-function isValidContentPath(pagePath) {
-  return (
-    typeof pagePath === "string" &&
-    pagePath.trim().length > 0 &&
-    pagePath !== "about:blank"
-  );
+body.show-kiosk-layout-debugging .modal-content-frame {
+  outline: 3px solid rgba(0, 255, 255, 0.95);
 }
